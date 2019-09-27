@@ -1,0 +1,22 @@
+{
+    "name": "consilience/api-rate-monitor",
+    "description": "Monitor requests through a PSR-12 client over a rolling window",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Jason Judge",
+            "email": "jason.judge@consil.co.uk"
+        }
+    ],
+    "minimum-stability": "dev",
+    "autoload": {
+        "psr-4": {
+            "Consilience\\Api\\RateMonitor\\": "src/"
+        }
+    },
+    "require": {
+        "php-http/client-implementation": "1.0",
+        "psr/cache-implementation": "1.0"
+    }
+}
