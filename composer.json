@@ -1,6 +1,6 @@
 {
     "name": "consilience/api-rate-monitor",
-    "description": "Monitor requests through a PSR-12 client over a rolling window",
+    "description": "Monitor requests through a PSR-18 client over a rolling window",
     "type": "library",
     "license": "MIT",
     "authors": [

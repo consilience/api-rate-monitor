@@ -52,7 +52,8 @@ class MonitorClient implements ClientInterface
     protected $cache;
 
     /**
-     *
+     * @param ClientInterface $client a PSR-18 client
+     * @param CacheItemPoolInterface $cache a PSR-6 cache pool
      */
     public function __construct(ClientInterface $client, CacheItemPoolInterface $cache)
     {
@@ -61,7 +62,10 @@ class MonitorClient implements ClientInterface
     }
 
     /**
+     * Send a request, maintaining the request count for the key over
+     * the rolling window.
      *
+     * @inherit
      */
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
@@ -114,18 +118,20 @@ class MonitorClient implements ClientInterface
     }
 
     /**
-     *
+     * @param string $key set the key the rolling window represents
+     * @return $this
      */
-    protected function setKey(string $key): self
+    protected function setKey(?string $key): self
     {
         $this->key = $key;
         return $this;
     }
 
     /**
-     *
+     * @string $key set the key the rolling window represents
+     * @return static clone of $this
      */
-    public function withKey(string $key): self
+    public function withKey(?string $key): self
     {
         return (clone $this)->setKey($key);
     }
