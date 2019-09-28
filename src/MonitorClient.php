@@ -14,32 +14,9 @@ use Psr\Cache\CacheItemPoolInterface;
 class MonitorClient implements ClientInterface
 {
     /**
-     * This PSR-7 header sets the key to monitor the rate for,
-     * and triggers the monitoring.
-     */
-    const RATE_LIMIT_KEY_HEADER_NAME  = 'X-Rate-Limit-Key';
-
-    const RATE_LIMIT_WINDOW_SIZE = 'X-Rate-Limit-Window-Size';
-
-    /**
      * @var string
      */
-    protected $keyValue;
-
-    /**
-     * @var int
-     */
-    protected $monitorWindowSeconds;
-
-    /**
-     * @var array
-     */
-    protected $timeSeries;
-
-    /**
-     * @var string
-     */
-    protected $lastKey;
+    protected $key;
 
     /**
      * @var ClientInterface
@@ -52,13 +29,22 @@ class MonitorClient implements ClientInterface
     protected $cache;
 
     /**
+     * @var TBC class to monitor the rate
+     */
+    protected $monitor;
+
+    /**
      * @param ClientInterface $client a PSR-18 client
      * @param CacheItemPoolInterface $cache a PSR-6 cache pool
      */
-    public function __construct(ClientInterface $client, CacheItemPoolInterface $cache)
-    {
+    public function __construct(
+        ClientInterface $client,
+        CacheItemPoolInterface $cache,
+        MonitorInterface $monitor
+    ) {
         $this->client = $client;
         $this->cache = $cache;
+        $this->monitor = $monitor;
     }
 
     /**
@@ -69,50 +55,29 @@ class MonitorClient implements ClientInterface
      */
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
-        $this->lastKey = $this->key ?? $request->getHeaderLine(static::RATE_LIMIT_KEY_HEADER_NAME);
-        $monitorWindowSeconds = $this->monitorWindowSeconds ??
-            $request->getHeaderLine(static::RATE_LIMIT_WINDOW_SIZE);
+        // Record the request to the time series first.
+        // This bit should really involve locking the key, but we will treat
+        // that as out-of-scope for now.
 
-        // Send the request first, then we have a response to put any
-        // monitor details into.
+        if ($this->key) {
+            $cacheItem = $this->cache->getItem($this->key);
 
-        $response = $this->client->sendRequest($request);
-
-        if ($this->key && $this->monitorWindowSeconds) {
-            $cacheItem = $this->cache->getItem($this->lastKey);
-
-            $this->timeSeries = $cacheItem->get() ?? [];
-
-            $time = time();
-
-            // Add an entry for this call.
-
-            $this->timeSeries[] = $time;
-
-            // Remove any older entries.
-
-            $oldestTime = $time - $monitorWindowSeconds;
-
-            // CHEKME: would it be more effecient to treat this as a queue,
-            // and unshift older values from the back of the array, until
-            // we reach a value in range?
-
-            array_filter($this->timeSeries, function ($requestTime) use ($oldestTime) {
-                return $requestTime > $oldestTime;
-            });
-
-            $cacheItem->set($this->timeSeries);
-
-            // Keep the expiry a whole time period away, so if
-            // we are not back within a monitoring period, the
-            // call history expires and is freed up.
-
-            $cacheItem->expiresAfter($monitorWindowSeconds);
+            $this->monitor->addRequest($cacheItem, $request);
 
             // Save it back to the cache.
 
             $this->cache->save($cacheItem);
         }
+
+        // TODO: here any throttling strategies, such as sleeping, aborting,
+        // or even just warning.
+
+        // Send the request.
+
+        $response = $this->client->sendRequest($request);
+
+        // TODO: Here any post request strategies, which may include adding
+        // metadata to the response for upstream handling.
 
         return $response;
     }
@@ -137,41 +102,28 @@ class MonitorClient implements ClientInterface
     }
 
     /**
-     *
+     * @return ?string the last used key
      */
-    protected function setMonitorWindowSize(int $monitorWindowSeconds): self
+    public function getKey(): ?string
     {
-        $this->monitorWindowSeconds = $monitorWindowSeconds;
-        return $this;
-    }
-
-    /**
-     *
-     */
-    public function withMonitorWindowSize(string $monitorWindowSeconds): self
-    {
-        return (clone $this)->setMonitorWindowSize($monitorWindowSeconds);
+        return $this->key;
     }
 
     /**
      * @return int the number of calls for the given key, or last used key in the window.
      */
-    public function getWindowCount(string $key = null): int
+    public function getAllocationUsed(string $key = null): int
     {
+        if ($key === null) {
+            $key = $this->key;
+        }
+
         if ($key) {
             $cacheItem = $this->cache->getItem($key);
 
-            return count($cacheItem->get() ?? []);
+            return $this->monitor->getAllocationUsed($cacheItem);
         }
 
-        return count($this->timeSeries ?? []);
-    }
-
-    /**
-     * @return ?string the last used key
-     */
-    public function getLastKey(): ?string
-    {
-        return $this->lastKey;
+        return 0;
     }
 }
