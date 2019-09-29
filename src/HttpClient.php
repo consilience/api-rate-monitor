@@ -3,7 +3,7 @@
 namespace Consilience\Api\RateMonitor;
 
 /**
- * PSR-12 client decorator to count requests over a rolling window.
+ * PSR-18 client decorator to count requests over a rolling window.
  */
 
 use Psr\Http\Client\ClientInterface;
@@ -11,7 +11,7 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Cache\CacheItemPoolInterface;
 
-class MonitorClient implements ClientInterface
+class HttpClient implements ClientInterface
 {
     /**
      * @var string
@@ -40,7 +40,7 @@ class MonitorClient implements ClientInterface
     public function __construct(
         ClientInterface $client,
         CacheItemPoolInterface $cache,
-        MonitorInterface $monitor
+        MonitorStrategyInterface $monitor
     ) {
         $this->client = $client;
         $this->cache = $cache;
@@ -110,7 +110,10 @@ class MonitorClient implements ClientInterface
     }
 
     /**
-     * @return int the number of calls for the given key, or last used key in the window.
+     * Returns the number of calls for the given key, or last used key in
+     * the rolling window.
+     *
+     * @inherit
      */
     public function getAllocationUsed(string $key = null): int
     {
@@ -122,6 +125,27 @@ class MonitorClient implements ClientInterface
             $cacheItem = $this->cache->getItem($key);
 
             return $this->monitor->getAllocationUsed($cacheItem);
+        }
+
+        return 0;
+    }
+
+    /**
+     * Returns the seconds we must wait until the rolling window clears enough
+     * previous requests to enable a burst of $requestCount requests.
+     *
+     * @inherit
+     */
+    public function getWaitSeconds(string $key = null, int $requestCount = 1): int
+    {
+        if ($key === null) {
+            $key = $this->key;
+        }
+
+        if ($key) {
+            $cacheItem = $this->cache->getItem($key);
+
+            return $this->monitor->getWaitSeconds($cacheItem, $requestCount);
         }
 
         return 0;
