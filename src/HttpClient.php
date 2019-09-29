@@ -8,10 +8,10 @@ namespace Consilience\Api\RateMonitor;
  * PSR-18 client decorator to count requests over a rolling window.
  */
 
+use Psr\Cache\CacheItemPoolInterface;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
-use Psr\Cache\CacheItemPoolInterface;
 
 class HttpClient implements ClientInterface
 {
@@ -71,26 +71,15 @@ class HttpClient implements ClientInterface
             $this->cache->save($cacheItem);
         }
 
-        // TODO: here any throttling strategies, such as sleeping, aborting,
+        // Here put any throttling strategies, such as sleeping, aborting,
         // or even just warning.
 
         // Send the request.
 
         return $this->client->sendRequest($request);
 
-        // TODO: Before returning the response, any post request strategies,
+        // Before returning the response, any post request strategies,
         // which may include adding metadata to the response for upstream handling.
-    }
-
-    /**
-     * @param string $key set the key the rolling window represents
-     *
-     * @return $this
-     */
-    protected function setKey(?string $key): self
-    {
-        $this->key = $key;
-        return $this;
     }
 
     /**
@@ -138,8 +127,10 @@ class HttpClient implements ClientInterface
      *
      * @inherit
      */
-    public function getWaitSeconds(?string $key = null, int $requestCount = 1): int
-    {
+    public function getWaitSeconds(
+        ?string $key = null,
+        int $requestCount = 1
+    ): int {
         if ($key === null) {
             $key = $this->key;
         }
@@ -151,5 +142,16 @@ class HttpClient implements ClientInterface
         }
 
         return 0;
+    }
+
+    /**
+     * @param string $key set the key the rolling window represents
+     *
+     * @return $this
+     */
+    protected function setKey(?string $key): self
+    {
+        $this->key = $key;
+        return $this;
     }
 }

@@ -118,17 +118,54 @@ That is a naive approach, and assumes a process can simply sleep
 for up to 60 seconds without database connections dropping etc.
 but it is just a simple example.
 
+Another strategy could be to spread the requests more evenly, with a minimum
+time between each, and keep adjusting the sleep delay to hover around a half
+allocated rolling window. That would keep the sleeps to a minimum length,
+but allow quick short bursts for processes that only need a few dozen requests
+at most.
+
+### How the rolling window logging works
+
+In short, each key points to an array in cache.
+The array contains a count of requests made for each second that in which
+requests were made.
+So indexed by a timestamp, we can see when all the requests in the last
+rolling window were made.
+
+At any time, the counts of requests for the last rolling window period
+can be summed to get the number of reqeusts made in the current rolling
+window. That tells us how may requests can be made *now* before the API
+rate limiting kicks in.
+
+Given that, if we want to make say ten requests right now, we can check if
+there are enough free slots on the current rolling window to do so.
+If there are, then we are fine and can just go ahead and make those requests.
+
+Now, if there are not enough slots left - the rolling windwo may allow 60 requests
+per minute, and in the last minute we have made 55 reqests, so we need to
+find out when five slots will be freed up before we can burst those ten requets
+to the API.
+
+We do that by counting the reqeusts from the start of the current rolling
+window, in this case 60 seconds ago. When we count the number of slots we
+need to free up, we can see what time that represents.
+Supposing those oldest five slots were taken up 30 seconds ago,
+then it means those slots will not be fully release until 60 seconds later,
+which will be 30 seconds into the future.
+So, the process needs to wait 30 seconds before it can send those ten requests
+*in a burst*.
+
+If the process only wanted to send one request, then it is likely it would need
+to wait a much shorter time. However, that really does depend on the past
+pattern of requests, i.e. how they were spread out or bunched up.
+
 # TODO
 
 * Tests.
-* Support time resolution rounding for long rolling window periods.
-  For example, count the requests per hour for a rolling window lasting
-  24 hours.
-  The time series for each key will only contain 12 entries to maintain.
-* CHECK: do decorators generally pass on methods they don't know about,
-  or do they implement the underlying interface they are extending and
-  their own additions *only*?
 * Support dynamic key detection. A single client with no key set can then
   support requests against many different keys on a request-by-request basis.
   Otherwise we are creating a new decorator class for each key.
   That may also be fine, depending on how the application organises its requests.
+* Support throttling strategy plugins. Allow this package to do the throttling
+  as defined by rules in a class.
+* Handle locking of cache items when they are being updated.

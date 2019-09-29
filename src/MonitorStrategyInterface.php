@@ -19,7 +19,7 @@ interface MonitorStrategyInterface
      * in case any information in the request is useful for the monitoring
      * strategy.
      *
-     * @param CacheItemInterface $cacheItem The PSR-6 cache item containing the time series
+     * @param CacheItemInterface $cacheItem PSR-6 cache item containing the time series
      * @param RequestInterface $request the request that is about to be sent
      *
      * @return void
@@ -37,9 +37,9 @@ interface MonitorStrategyInterface
      * so it can be used to calculate how big a burst of requests is
      * acceptable by the client now.
      *
-     * @param CacheItemInterface $cacheItem The PSR-6 cache item containing the time series
+     * @param CacheItemInterface $cacheItem PSR-6 cache item containing the time series
      *
-     * @return int the number of reqeusts made in the rolling window defined by the time series
+     * @return int number of reqeusts in the rolling window in the time series
      */
     public function getAllocationUsed(CacheItemInterface $cacheItem): int;
 
@@ -48,10 +48,13 @@ interface MonitorStrategyInterface
      * without blowing the allocation.
      * The requests are assumed to be a "burst" i.e. sent in rapid succession.
      *
-     * @param CacheItemInterface $cacheItem The PSR-6 cache item containing the time series
+     * @param CacheItemInterface $cacheItem PSR-6 cache item containing the time series
      * @param int $requestCount The number of requests we would like to burst
      *
      * @return int the number of seconds we must wait before a request burst
      */
-    public function getWaitSeconds(CacheItemInterface $cacheItem, int $requestCount = 1): int;
+    public function getWaitSeconds(
+        CacheItemInterface $cacheItem,
+        int $requestCount = 1
+    ): int;
 }

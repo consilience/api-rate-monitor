@@ -8,15 +8,13 @@ namespace Consilience\Api\RateMonitor\MonitorStrategy;
  * Rolling window monitor.
  */
 
+use Consilience\Api\RateMonitor\MonitorStrategyInterface;
 use InvalidArgumentException;
 use Psr\Cache\CacheItemInterface;
 use Psr\Http\Message\RequestInterface;
-use Consilience\Api\RateMonitor\MonitorStrategyInterface;
 
 class RollingWindow implements MonitorStrategyInterface
 {
-    // TODO: monitor resolution.
-
     /**
      * @var int the size of the window to monitor
      */
@@ -27,10 +25,23 @@ class RollingWindow implements MonitorStrategyInterface
      */
     protected $windowAllocation;
 
-    public function __construct(int $windowSeconds = 60, int $windowAllocation = 60)
-    {
+    /**
+     * @var int the size of the group that requests will be counted in
+     */
+    protected $countGroupSizeSeconds = 1;
+
+    /**
+     * @param int $windowSeconds the length of the rolliing window
+     * @param int $windowAllocation the number of requests allowed in the window
+     */
+    public function __construct(
+        int $windowSeconds = 60,
+        int $windowAllocation = 60,
+        int $countGroupSizeSeconds = 1
+    ) {
         $this->windowSeconds = $windowSeconds;
         $this->windowAllocation = $windowAllocation;
+        $this->countGroupSizeSeconds = $countGroupSizeSeconds;
     }
 
     /**
@@ -47,10 +58,16 @@ class RollingWindow implements MonitorStrategyInterface
 
         $now = time();
 
-        // TODO: set the resolution of the time point.
+        // Set the group size of the time point.
         // If we are monitoring longer periods, we don't want to store
         // too much data in the cache, so this will group them into bigger
         // time chunks.
+        // Be careful of edge cases; the group size must be a whole factor
+        // of the total window size.
+
+        if ($this->countGroupSizeSeconds > 1) {
+            $now -= $now % $this->countGroupSizeSeconds;
+        }
 
         // Add or update an entry for this request or requests.
 
@@ -89,42 +106,16 @@ class RollingWindow implements MonitorStrategyInterface
             $this->timeSeries($cacheItem)
         );
     }
-
-    /**
-     * Calculate the allocation used in a time series.
-     *
-     * @param int $now the current unix timestamp.
-     * @param array $timeSeries the time series of requests to scan and count
-     *
-     * @return int
-     */
-    protected function allocationUsedNow(int $now, array $timeSeries): int
-    {
-        $expiredTime = $now - $this->windowSeconds;
-
-        $total = 0;
-
-        foreach ($timeSeries as $time => $count) {
-            if ($time > $now) {
-                break;
-            }
-
-            if ($time > $expiredTime) {
-                $total += $count;
-            }
-        }
-
-        return $total;
-    }
-
     /**
      * Calculate how long we need to wait until we can make N requests
      * without blowing the rolling window allocation.
      *
      * @inherit
      */
-    public function getWaitSeconds(CacheItemInterface $cacheItem, int $requestCount = 1): int
-    {
+    public function getWaitSeconds(
+        CacheItemInterface $cacheItem,
+        int $requestCount = 1
+    ): int {
         $timeSeries = $this->timeSeries($cacheItem);
 
         $now = time();
@@ -145,7 +136,7 @@ class RollingWindow implements MonitorStrategyInterface
 
         if ($requestCount > $this->windowAllocation) {
             throw new InvalidArgumentException(sprintf(
-                'Asking for a time to burst %d requests when window allowance is only %d',
+                'Specified time to burst %d requests; window allowance only %d',
                 $requestCount,
                 $this->windowAllocation
             ));
@@ -189,12 +180,39 @@ class RollingWindow implements MonitorStrategyInterface
      * over cache items beloning to other processes, so it's a good
      * thing, but probably needs to be formalised a little more.
      *
-     * @param CacheItemInterface $cacheItem the PSR-6 cache item containing the time series
+     * @param CacheItemInterface $cacheItem PSR-6 cache item for the time series
      *
      * @return array the cached time series or a new empty array
      */
     protected function timeSeries(CacheItemInterface $cacheItem): array
     {
         return $cacheItem->get() ?? [];
+    }
+
+    /**
+     * Calculate the allocation used in a time series.
+     *
+     * @param int $now the current unix timestamp.
+     * @param array $timeSeries the time series of requests to scan and count
+     *
+     * @return int
+     */
+    protected function allocationUsedNow(int $now, array $timeSeries): int
+    {
+        $expiredTime = $now - $this->windowSeconds;
+
+        $total = 0;
+
+        foreach ($timeSeries as $time => $count) {
+            if ($time > $now) {
+                break;
+            }
+
+            if ($time > $expiredTime) {
+                $total += $count;
+            }
+        }
+
+        return $total;
     }
 }
