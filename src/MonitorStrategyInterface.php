@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Consilience\Api\RateMonitor;
 
 /**
@@ -26,7 +28,7 @@ interface MonitorStrategyInterface
         CacheItemInterface $cacheItem,
         RequestInterface $request,
         int $requestCount = 1
-    );
+    ): void;
 
     /**
      * Get the total number of requests used in the allocated unit.

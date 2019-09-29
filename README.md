@@ -73,6 +73,8 @@ use Consilience\Api\RateMonitor\MonitorStrategy\RollingWindow;
 // $xeroOrganisationId is the Xero organisation we are connecting to.
 // 60 = size of rolling window, in seconds.
 // 60 = number of requests that can be made in that window.
+// A bit of a safety margin could see the number of requests
+// set to a lower figure, 55 for example.
 
 $httpClient = new HttpClient(
    $httpClient,

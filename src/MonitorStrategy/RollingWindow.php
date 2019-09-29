@@ -1,11 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Consilience\Api\RateMonitor\MonitorStrategy;
 
 /**
  * Rolling window monitor.
  */
 
+use InvalidArgumentException;
 use Psr\Cache\CacheItemInterface;
 use Psr\Http\Message\RequestInterface;
 use Consilience\Api\RateMonitor\MonitorStrategyInterface;
@@ -39,7 +42,7 @@ class RollingWindow implements MonitorStrategyInterface
         CacheItemInterface $cacheItem,
         RequestInterface $request,
         int $requestCount = 1
-    ) {
+    ): void {
         $timeSeries = $this->timeSeries($cacheItem);
 
         $now = time();
@@ -61,7 +64,7 @@ class RollingWindow implements MonitorStrategyInterface
         $expiredTime = $now - $this->windowSeconds;
 
         if (array_key_first($timeSeries) < $expiredTime) {
-            $timeSeries = array_filter($timeSeries, function ($key) use ($expiredTime) {
+            $timeSeries = array_filter($timeSeries, static function ($key) use ($expiredTime) {
                 return $key >= $expiredTime;
             }, ARRAY_FILTER_USE_KEY);
         }
@@ -89,8 +92,13 @@ class RollingWindow implements MonitorStrategyInterface
 
     /**
      * Calculate the allocation used in a time series.
+     *
+     * @param int $now the current unix timestamp.
+     * @param array $timeSeries the time series of requests to scan and count
+     *
+     * @return int
      */
-    protected function allocationUsedNow(int $now, array $timeSeries)
+    protected function allocationUsedNow(int $now, array $timeSeries): int
     {
         $expiredTime = $now - $this->windowSeconds;
 
@@ -136,7 +144,11 @@ class RollingWindow implements MonitorStrategyInterface
         // then we are asking for the impossible - throw exception.
 
         if ($requestCount > $this->windowAllocation) {
-            throw new \Exception('Asking for too many');
+            throw new InvalidArgumentException(sprintf(
+                'Asking for a time to burst %d requests when window allowance is only %d',
+                $requestCount,
+                $this->windowAllocation
+            ));
         }
 
         $toFreeUp = $requestCount - $allocationAvailableNow;
@@ -164,9 +176,9 @@ class RollingWindow implements MonitorStrategyInterface
 
         if ($lastBlockingRequestTime !== null) {
             return $lastBlockingRequestTime + $this->windowSeconds - $now;
-        } else {
-            return 0;
         }
+
+        return 0;
     }
 
     /**
@@ -183,6 +195,6 @@ class RollingWindow implements MonitorStrategyInterface
      */
     protected function timeSeries(CacheItemInterface $cacheItem): array
     {
-        return $timeSeries = $cacheItem->get() ?? [];
+        return $cacheItem->get() ?? [];
     }
 }

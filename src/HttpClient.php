@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Consilience\Api\RateMonitor;
 
 /**
@@ -74,16 +76,15 @@ class HttpClient implements ClientInterface
 
         // Send the request.
 
-        $response = $this->client->sendRequest($request);
+        return $this->client->sendRequest($request);
 
-        // TODO: Here any post request strategies, which may include adding
-        // metadata to the response for upstream handling.
-
-        return $response;
+        // TODO: Before returning the response, any post request strategies,
+        // which may include adding metadata to the response for upstream handling.
     }
 
     /**
      * @param string $key set the key the rolling window represents
+     *
      * @return $this
      */
     protected function setKey(?string $key): self
@@ -94,6 +95,7 @@ class HttpClient implements ClientInterface
 
     /**
      * @string $key set the key the rolling window represents
+     *
      * @return static clone of $this
      */
     public function withKey(?string $key): self
@@ -115,7 +117,7 @@ class HttpClient implements ClientInterface
      *
      * @inherit
      */
-    public function getAllocationUsed(string $key = null): int
+    public function getAllocationUsed(?string $key = null): int
     {
         if ($key === null) {
             $key = $this->key;
@@ -136,7 +138,7 @@ class HttpClient implements ClientInterface
      *
      * @inherit
      */
-    public function getWaitSeconds(string $key = null, int $requestCount = 1): int
+    public function getWaitSeconds(?string $key = null, int $requestCount = 1): int
     {
         if ($key === null) {
             $key = $this->key;
