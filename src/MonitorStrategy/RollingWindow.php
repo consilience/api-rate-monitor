@@ -81,11 +81,26 @@ class RollingWindow implements MonitorStrategyInterface
      */
     public function getAllocationUsed(CacheItemInterface $cacheItem): int
     {
-        $expiredTime = time() - $this->windowSeconds;
+        return $this->allocationUsedNow(
+            time(),
+            $this->timeSeries($cacheItem)
+        );
+    }
+
+    /**
+     * Calculate the allocation used in a time series.
+     */
+    protected function allocationUsedNow(int $now, array $timeSeries)
+    {
+        $expiredTime = $now - $this->windowSeconds;
 
         $total = 0;
 
-        foreach ($this->timeSeries($cacheItem) as $time => $count) {
+        foreach ($timeSeries as $time => $count) {
+            if ($time > $now) {
+                break;
+            }
+
             if ($time > $expiredTime) {
                 $total += $count;
             }
@@ -106,14 +121,34 @@ class RollingWindow implements MonitorStrategyInterface
 
         $now = time();
 
-        $outsideWindow = $now - $this->windowSeconds;
+        $allocationUsedNow = $this->allocationUsedNow($now, $timeSeries);
+
+        $allocationAvailableNow = $this->windowAllocation - $allocationUsedNow;
+
+        // If there is already enough free allocations, then we are fine to
+        // burst them now.
+
+        if ($allocationAvailableNow >= $requestCount) {
+            return 0;
+        }
+
+        // If we have asked for more than can fit into a window,
+        // then we are asking for the impossible - throw exception.
+
+        if ($requestCount > $this->windowAllocation) {
+            throw new \Exception('Asking for too many');
+        }
+
+        $toFreeUp = $requestCount - $allocationAvailableNow;
+
+        $expiredTime = $now - $this->windowSeconds;
 
         $lastBlockingRequestTime = null;
 
         $requestSum = 0;
 
         foreach ($timeSeries as $time => $count) {
-            if ($time < $outsideWindow) {
+            if ($time < $expiredTime) {
                 // Out of scope (too old), skip.
 
                 continue;
@@ -121,7 +156,7 @@ class RollingWindow implements MonitorStrategyInterface
 
             $requestSum += $count;
 
-            if ($requestSum >= ($this->windowSeconds - $requestCount)) {
+            if ($requestSum >= $toFreeUp) {
                 $lastBlockingRequestTime = $time;
                 break;
             }
