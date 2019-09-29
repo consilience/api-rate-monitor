@@ -70,6 +70,8 @@ Now we use the decorator:
 use Consilience\Api\RateMonitor\HttpClient;
 use Consilience\Api\RateMonitor\MonitorStrategy\RollingWindow;
 
+$httpClient = {{ your base PSR-18 HTTP client }}
+
 // $xeroOrganisationId is the Xero organisation we are connecting to.
 // 60 = size of rolling window, in seconds.
 // 60 = number of requests that can be made in that window.
@@ -91,8 +93,9 @@ methods above the `Psr\Http\Client\ClientInterface` interface:
 * `getWaitSeconds()` - tells us how many seconds we much wait before sending
    more requests.
 
-For `getWaitSeconds()` you can tell it how many request you would like to burst,
-and it will return the wait time needed to burst that number of requests on one go.
+For `getWaitSeconds()` you can specify how many request you would like to burst,
+i.e. send rapidly, and it will return the wait time needed to burst that number
+of requests.
 
 So one strategy for using this may be sleeping before sending the next request:
 
@@ -115,8 +118,8 @@ function sendRequest(
 ```
 
 That is a naive approach, and assumes a process can simply sleep
-for up to 60 seconds without database connections dropping etc.
-but it is just a simple example.
+for an extended time without database and other connections dropping,
+but serves as a simple example.
 
 Another strategy could be to spread the requests more evenly, with a minimum
 time between each, and keep adjusting the sleep delay to hover around a half
@@ -133,7 +136,7 @@ So indexed by a timestamp, we can see when all the requests in the last
 rolling window were made.
 
 At any time, the counts of requests for the last rolling window period
-can be summed to get the number of reqeusts made in the current rolling
+can be summed to get the number of requests made in the current rolling
 window. That tells us how may requests can be made *now* before the API
 rate limiting kicks in.
 
@@ -157,7 +160,7 @@ So, the process needs to wait 30 seconds before it can send those ten requests
 
 If the process only wanted to send one request, then it is likely it would need
 to wait a much shorter time. However, that really does depend on the past
-pattern of requests, i.e. how they were spread out or bunched up.
+pattern of requests, i.e. how they were spread out or bunched together.
 
 # TODO
 
