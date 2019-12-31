@@ -21,6 +21,8 @@ class HttpClient implements ClientInterface
     protected $key;
 
     /**
+     * The base client object, or a parent decorator if many are chained.
+     *
      * @var ClientInterface
      */
     protected $client;
@@ -153,5 +155,16 @@ class HttpClient implements ClientInterface
     {
         $this->key = $key;
         return $this;
+    }
+
+    /**
+     * Pass any unknown methods up the chain to the parent decorator,
+     * if there is one.
+     */
+    public function __call($method, $parameters)
+    {
+        $result = $this->client->$method(...$parameters);
+
+        return ($result === $this->client) ? $this : $result;
     }
 }
